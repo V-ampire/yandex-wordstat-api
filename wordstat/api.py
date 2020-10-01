@@ -1,6 +1,8 @@
 import logging
 import requests
-from typing import Union, Any, NoReturn
+from typing import Union, Any, Optional
+
+from .entities import WordstatReportInfo, WordstatReportStatusInfo
 
 
 logger = logging.getLogger(__name__)
@@ -10,7 +12,7 @@ class WordstatAPIError(Exception):
     """
     Базовое исключение для API вордстата.
     """
-	pass
+    pass
 
 
 class Wordstat(object):
@@ -26,17 +28,22 @@ class Wordstat(object):
         """
         self.token = token
 
-    def _prepare_params(self, params: dict[str, Union[dict, list, str]]) -> dict[str, Union[dict, list, str]]:
+    def _process_request(self, params: dict[str, Union[dict, list, str]], headers: dict[str, str]={}) -> dict[str, list]:
         """
-        Подготавливает параметры для запроса.
-        :param params: Параметры запроса.
+        Выполнить запрос к API Яндекс.Вордстат.
+        :param params: Входные данные.
+        :param headers: Заголовки запроса.
         """
-        return params.update({
+        params.update({
             "locale": "ru",
             "token": self.token
         })
+        headers['User-Agent'] = "Yandex.Wordstat.API/Python"
+        response = requests.post(self.API_URL, json=params, headers=headers)
+        response.raise_for_status()
+        return response.json()
 
-    def _process_response(self, response: dict[str, str]) -> Union[int, list]:
+    def _process_response(self, response: dict[str, Union[int, list]]) -> Union[int, list]:
         """
         Обработать ответ от Яндекс.Вордстат.
         :param response: Данные полученные от API Яндекс.Вордстат.
@@ -49,7 +56,7 @@ class Wordstat(object):
             raise WordstatAPIError(f'Неизвестный формат ответа от API Яндекс.Вордстат: {response}')
         return result   
 
-    def create_report(self, phrases: list[str], geo_id: list[int]=[]) -> Union[int, list]:
+    def create_report(self, phrases: list[str], geo_id: list[int]=[]) -> int:
         """
         Запускает на сервере формирование отчета о статистике поисковых запросов.
         Метод возвращает идентификатор будущего отчета.
@@ -73,11 +80,9 @@ class Wordstat(object):
                 "GeoID": geo_id,
             },
         }
-        response = requests.post(self.API_URL, json=self._prepare_params(params))
-        response.raise_for_status()
-        return self._process_response(response.json())
+        return self._process_response(self._process_request(params))
 
-    def delete_report(self, report_id: int) -> Union[int, list]:
+    def delete_report(self, report_id: int)  -> int:
         """
         Удаляет отчет о статистике поисковых запросов.
         Отчеты удаляются автоматически через 5 часов после формирования. 
@@ -89,7 +94,24 @@ class Wordstat(object):
             "method": "DeleteWordstatReport",
             "param": report_id,
         }
-        response = requests.post(self.API_URL, json=self._prepare_params(params))
-        response.raise_for_status()
-        return self._process_response(response.json())
+        return self._process_response(self._process_request(params))
 
+    def get_report(self, report_id: int) -> WordstatReportInfo:
+        """
+        Возвращает отчет о статистике поисковых запросов.
+        :param report_id: ID отчета.
+        """
+        params = {
+            "method": "GetWordstatReport",
+            "param": report_id,
+        }
+        return self._process_response(self._process_request(params))
+
+    def get_report_list(self) -> list[WordstatReportStatusInfo]:
+        """
+        Возвращает список сформированных и формируемых отчетов о статистике поисковых запросов.
+        """
+        params = {
+            "method": "GetWordstatReportList"
+        }
+        return self._process_response(self._process_request(params))
