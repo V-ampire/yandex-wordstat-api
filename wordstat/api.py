@@ -1,6 +1,6 @@
 import logging
 import requests
-from typing import Union, Any, Optional
+from typing import Union, Any, Optional, Dict, List
 
 from .entities import WordstatReportInfo, WordstatReportStatusInfo
 
@@ -28,7 +28,7 @@ class Wordstat(object):
         """
         self.token = token
 
-    def _process_request(self, params: dict[str, Union[dict, list, str]], headers: dict[str, str]={}) -> dict[str, list]:
+    def _process_request(self, params: Dict[str, Union[Dict, List, str]], headers: Dict[str, str]={}) -> Dict[str, Any]:
         """
         Выполнить запрос к API Яндекс.Вордстат.
         :param params: Входные данные.
@@ -43,7 +43,7 @@ class Wordstat(object):
         response.raise_for_status()
         return response.json()
 
-    def _process_response(self, response: dict[str, Union[int, list]]) -> Union[int, list]:
+    def _process_response(self, response: Dict[str, Any]) -> Union[int, List]:
         """
         Обработать ответ от Яндекс.Вордстат.
         :param response: Данные полученные от API Яндекс.Вордстат.
@@ -52,11 +52,11 @@ class Wordstat(object):
             raise WordstatAPIError(f'Ошибка API Яндекс.Вордстат: {response}')
         try:
             result = response['data']
-        except AttributeError:
+        except KeyError:
             raise WordstatAPIError(f'Неизвестный формат ответа от API Яндекс.Вордстат: {response}')
         return result   
 
-    def create_report(self, phrases: list[str], geo_id: list[int]=[]) -> int:
+    def create_report(self, phrases: List[str], geo_ids: List[int]=[]) -> int:
         """
         Запускает на сервере формирование отчета о статистике поисковых запросов.
         Метод возвращает идентификатор будущего отчета.
@@ -77,7 +77,7 @@ class Wordstat(object):
             "method": "CreateNewWordstatReport",
             "param": {
                 "Phrases": phrases,
-                "GeoID": geo_id,
+                "GeoID": geo_ids,
             },
         }
         return self._process_response(self._process_request(params))
@@ -105,13 +105,16 @@ class Wordstat(object):
             "method": "GetWordstatReport",
             "param": report_id,
         }
-        return self._process_response(self._process_request(params))
+        report_data = self._process_response(self._process_request(params))
+        return WordstatReportInfo(**report_data)
 
-    def get_report_list(self) -> list[WordstatReportStatusInfo]:
+    def get_report_list(self) -> List[WordstatReportStatusInfo]:
         """
         Возвращает список сформированных и формируемых отчетов о статистике поисковых запросов.
         """
         params = {
             "method": "GetWordstatReportList"
         }
-        return self._process_response(self._process_request(params))
+        report_list = self._process_response(self._process_request(params))
+        return [WordstatReportStatusInfo(**report_data) for report_data in report_list]
+
